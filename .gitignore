@@ -16,7 +16,7 @@ data/
 models/
 sessions.json
 *.gguf
-*.pkl
+detector_pipeline_lr_gs.pkl
 
 # IDE / OS
 .vscode/
