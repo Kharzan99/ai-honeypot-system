@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+venv/
+honey/
+
+# Environment files
+.env
+.env.*
+
+# Data, models & sessions
+data/
+models/
+sessions.json
+*.gguf
+*.pkl
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+AImodel.ipynb

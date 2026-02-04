@@ -1,0 +1,26 @@
+{
+  "RULE_KEYWORDS": [
+    "upi",
+    "bank",
+    "bank account",
+    "account",
+    "otp",
+    "paytm",
+    "transfer",
+    "refund",
+    "claim",
+    "won",
+    "prize",
+    "verify",
+    "verify now",
+    "immediately",
+    "urgent",
+    "asap",
+    "suspend",
+    "blocked",
+    "suspended"
+  ],
+  "RULE_THRESHOLD": 5.0,
+  "ML_PROB_THRESHOLD": 0.4,
+  "MODEL": "Logistic Regression"
+}
