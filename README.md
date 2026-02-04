@@ -8,21 +8,22 @@
 ---
 
 ## Project Structure
-'''
+
+```
 AIHoney Pot System/
 │
 ├── app/
-│ ├── main.py # FastAPI entrypoint
-│ ├── config.py # env / paths
-│ ├── detector.py # rule + ML detection
-│ ├── agent.py # persona, trust, escalation
-│ ├── llm.py # llama.cpp wrapper (subprocess/dummy)
-│ ├── intelligence.py # regex extractors
-│ └── callback.py # GUVI final result
-├── models/ # (LOCAL) model artifacts (not in repo)
-├── data/ # (LOCAL) training/test CSVs (ignored)
-├── sessions.json # (LOCAL) session state (ignored)
+│   ├── main.py           # FastAPI entrypoint
+│   ├── config.py         # env / paths
+│   ├── detector.py       # rule + ML detection
+│   ├── agent.py          # persona, trust, escalation
+│   ├── llm.py            # llama.cpp wrapper (subprocess/dummy)
+│   ├── intelligence.py   # regex extractors
+│   └── callback.py       # GUVI final result
+├── models/               # (LOCAL) model artifacts (not in repo)
+├── data/                 # (LOCAL) training/test CSVs (ignored)
+├── sessions.json         # (LOCAL) session state (ignored)
 ├── requirements.txt
-├── start.sh # render start script
+├── start.sh              # render start script
 └── README.md
-'''
+```
