@@ -194,13 +194,16 @@ def generate_agent_reply(session_state: Dict[str, Any],
         short_summary = session_state.get("long_summary", "") or ""
         recent_texts = [m.get("text") for m in session_state.get("short_memory", [])[-3:]]
         recent = " | ".join([r for r in recent_texts if r])
+        extra_instruction = ""
+        if intent == "ask_for_upi":
+            extra_instruction = " Avoid examples like '(example@upi)'."
         prompt = (
             f"{PERSONA_SHORT}\n"
             f"Session summary: {short_summary}\n"
             f"Trust score: {session_state.get('trust_score')}\n"
             f"Recent incoming: {recent}\n\n"
             f"Task: Produce a short natural human reply (one or two sentences) that fits the persona and intent '{intent}'. "
-            f"Keep it conversational, avoid examples like '(example@upi)', and sound like a normal Indian person."
+            f"Keep it conversational,{extra_instruction} and sound like a normal Indian person."
         )
         try:
             lm_reply = llm_generate(prompt)

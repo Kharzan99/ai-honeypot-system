@@ -2,6 +2,7 @@
 import subprocess
 import logging
 import unicodedata
+import re
 from typing import Optional, List
 from .config import LLM_MODE, MODEL_PATH, LLAMA_SUBPROCESS_CMD_TEMPLATE
 
@@ -31,6 +32,20 @@ class DummyLLM(BaseLLM):
     Deterministic filler for offline testing. Sounds more natural/Indian.
     """
     def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.2) -> str:
+        intent = None
+        match = re.search(r"intent\s+'([a-z_]+)'", prompt, re.IGNORECASE)
+        if match:
+            intent = match.group(1).lower()
+
+        if intent == "confirm":
+            return "Understood. Let me confirm and get back to you."
+        if intent == "ask_reason":
+            return "Why is my account being blocked? Please explain what's wrong so I can check."
+        if intent == "ask_for_upi":
+            return "Okay, I understand. Which UPI ID should I use? Please share the UPI ID or phone number."
+        if intent == "ask_for_phone":
+            return "Please share the phone number so I can call or message to verify."
+
         up = prompt.upper()
         if "UPI" in up or "ASK_FOR_UPI" in up:
             return "Okay, I understand. Which UPI ID should I use? Please share the UPI ID or phone number."

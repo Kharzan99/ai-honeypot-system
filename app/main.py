@@ -300,13 +300,15 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
             log.info(f"[{session_id}] Calling agent with merged_intel: {merged_intel}")
             log.info(f"[{session_id}] Session state before agent: upi_seen={session_state.get('upi_seen')}, phone_seen={session_state.get('phone_seen')}, trust={session_state.get('trust_score')}")
 
-            # Provide "llm" mode so generate_agent_reply will rephrase the selected template if available
+            use_llm = bool(llm_generate) and LLM_MODE == "subprocess"
+
+            # Provide "llm" mode only for real LLMs to avoid overriding intent in dummy mode
             agent_out = generate_agent_reply(
                 session_state=session_state,
                 last_message={"text": raw_text, "sender": msg.sender},
                 extracted=merged_intel,
-                mode="llm" if llm_generate else "template",
-                llm_generate=llm_generate,
+                mode="llm" if use_llm else "template",
+                llm_generate=llm_generate if use_llm else None,
                 merged_intel=merged_intel
             )
 
