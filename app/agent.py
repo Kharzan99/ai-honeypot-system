@@ -143,6 +143,11 @@ def generate_agent_reply(session_state: Dict[str, Any],
     mode: 'template' or 'llm' (if llm_generate provided, will call it to rephrase)
     """
     session_state.setdefault("stage", "initial")
+    
+    # ✅ FIRST: Update session state (sets upi_seen, link_seen, adjusts trust_score)
+    update_session_state(session_state, last_message.get("text", ""), extracted)
+    
+    # ✅ THEN: Get updated trust and flags for intent decision
     trust = session_state.get("trust_score", 0)
 
     # Decision logic (escalation)
@@ -163,9 +168,6 @@ def generate_agent_reply(session_state: Dict[str, Any],
     # softer ask if trust low
     if intent == "ask_for_upi" and trust < 40:
         reply = "I am not comfortable sending money yet — please tell me which account or UPI ID they mentioned and why."
-
-    # Update session state
-    update_session_state(session_state, last_message.get("text", ""), extracted)
 
     # Optionally rephrase with LLM for naturalness
     if mode == "llm" and llm_generate:
