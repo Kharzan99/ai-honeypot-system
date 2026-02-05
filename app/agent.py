@@ -106,8 +106,6 @@ def update_session_state(session_state: Dict[str, Any], incoming_text: str, extr
     s.setdefault("link_seen", False)
     s.setdefault("phone_seen", False)
 
-    s["messages_count"] += 1
-
     txt = (incoming_text or "").lower() or ""
 
     # calming / polite words => increase trust

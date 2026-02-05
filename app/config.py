@@ -7,7 +7,7 @@ load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-API_KEY = os.environ.get("AH_API_KEY", "replace-with-your-api-key")
+API_KEY = os.environ.get("AH_API_KEY", "super12345")
 
 DETECTOR_PIPELINE_PATH = os.environ.get(
     "DETECTOR_PIPELINE_PATH",

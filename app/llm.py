@@ -1,10 +1,26 @@
 # app/llm.py
 import subprocess
 import logging
+import unicodedata
 from typing import Optional, List
 from .config import LLM_MODE, MODEL_PATH, LLAMA_SUBPROCESS_CMD_TEMPLATE
 
 log = logging.getLogger(__name__)
+
+def normalize_output_text(s: str) -> str:
+    """Normalize unicode and replace smart quotes/dashes with ASCII equivalents."""
+    if not isinstance(s, str):
+        return ""
+    # normalize unicode (NFKC) and replace common smart quotes with ascii
+    s = unicodedata.normalize("NFKC", s)
+    s = s.replace("\u2019", "'").replace("\u2018", "'")
+    s = s.replace("\u201c", '"').replace("\u201d", '"')
+    s = s.replace("\u2013", "-").replace("\u2014", "-")
+    # replace genuine replacement char (if present) with '?'
+    s = s.replace("\ufffd", "?")
+    # collapse weird space types
+    s = " ".join(s.split())
+    return s
 
 class BaseLLM:
     def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.2) -> str:
@@ -48,7 +64,7 @@ class SubprocessLLM(BaseLLM):
         template = template.replace("{model}", str(self.model_path))
         template = template.replace("{max_tokens}", str(max_tokens))
         # find where "{prompt}" occurs
-        if "{prompt}" not in self.cmd_template:
+        if "{prompt}" not in template:
             # fallback: simple split
             return template.split()
         pre, post = template.split("{prompt}", 1)
@@ -60,22 +76,31 @@ class SubprocessLLM(BaseLLM):
         return argv
 
     def generate(self, prompt: str, max_tokens: int = 256, temperature: float = 0.2) -> str:
+        """
+        Run LLM subprocess with safe argument building.
+        """
         argv = self._build_argv(prompt, max_tokens)
         log.debug("Running LLM command argv: %s", argv[:8])
+        
         try:
-            proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+            proc = subprocess.run(argv, capture_output=True, text=True, encoding="utf-8", timeout=60)
         except subprocess.SubprocessError as e:
             log.exception("LLM subprocess failed")
             return f"[LLM ERROR] {e}"
-        out = (proc.stdout or "").strip()
-        if not out:
-            out = (proc.stderr or "").strip()
+        except Exception as e:
+            log.exception("LLM subprocess unexpected error: %s", e)
+            return f"[LLM ERROR] {e}"
+        
+        out = (proc.stdout or "").strip() or (proc.stderr or "").strip()
+        out = normalize_output_text(out)
+        
         # sometimes CLI prints banner + answer; try to return only last paragraph
         if out:
             # heuristics: split by double newlines and take last non-empty chunk
             chunks = [c.strip() for c in out.split("\n\n") if c.strip()]
             if chunks:
                 return chunks[-1]
+        
         return out or "[LLM produced no output]"
 
 def get_llm():
