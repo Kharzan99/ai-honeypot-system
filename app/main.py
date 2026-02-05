@@ -47,6 +47,53 @@ def sanitize_text_for_log(text: str, max_len: int = 140) -> str:
         return s[:max_len] + "…"
     return s
 
+def generate_agent_notes(extracted_intel: Dict[str, Any], scam_reason: str) -> str:
+    """Generate human-readable summary for GUVI callback instead of debug format."""
+    notes = []
+    
+    # Detection reason
+    if scam_reason == "rule":
+        notes.append("Rule-based detection: Scammer used payment redirection and urgency tactics.")
+    elif scam_reason == "ml":
+        notes.append("ML-based detection: High-confidence scam pattern identified.")
+    else:
+        notes.append("Multi-factor detection: Scam indicators confirmed.")
+    
+    # Extracted malicious entities
+    if extracted_intel.get("upiIds"):
+        upi_list = ", ".join(extracted_intel["upiIds"])
+        notes.append(f"Malicious UPI ID(s): {upi_list}")
+    
+    if extracted_intel.get("phoneNumbers"):
+        phone_list = ", ".join(extracted_intel["phoneNumbers"])
+        notes.append(f"Phishing phone number(s): {phone_list}")
+    
+    if extracted_intel.get("bankAccounts"):
+        bank_list = ", ".join(extracted_intel["bankAccounts"])
+        notes.append(f"Bank account(s) requested/mentioned: {bank_list}")
+    
+    if extracted_intel.get("phishingLinks"):
+        link_list = ", ".join(extracted_intel["phishingLinks"])
+        notes.append(f"Suspicious link(s): {link_list}")
+    
+    # Threat patterns from keywords
+    kw = extracted_intel.get("suspiciousKeywords", [])
+    threats = []
+    
+    if any(w in kw for w in ["account blocked", "suspended", "account will be blocked"]):
+        threats.append("account blockage threat")
+    if any(w in kw for w in ["transfer", "payment", "send money", "paytm"]):
+        threats.append("payment redirection")
+    if any(w in kw for w in ["otp", "verify", "kyc"]):
+        threats.append("credential/OTP harvesting")
+    if any(w in kw for w in ["urgent", "immediately"]):
+        threats.append("artificial urgency")
+    
+    if threats:
+        notes.append(f"Attack vectors: {', '.join(threats)}")
+    
+    return " ".join(notes) or "Scam detected with phishing and payment redirection attempt."
+
 app = FastAPI(title="Agentic HoneyPot API")
 
 
@@ -259,7 +306,8 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
                 last_message={"text": raw_text, "sender": msg.sender},
                 extracted=merged_intel,
                 mode="llm" if llm_generate else "template",
-                llm_generate=llm_generate
+                llm_generate=llm_generate,
+                merged_intel=merged_intel
             )
 
             # Update session state returned by agent (it may modify stage/trust)
@@ -302,17 +350,20 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
             has_payment_info = bool(merged_intel.get("upiIds") or merged_intel.get("phoneNumbers") or merged_intel.get("phishingLinks"))
             finalized_sent = session_state.get("finalized_sent", False)
             
-            # Only send finalization callback ONCE per session
-            if has_payment_info and total_messages >= 3 and not finalized_sent:
+            # Only send finalization callback ONCE per session, after extended conversation (min 10 messages)
+            MIN_MESSAGES_FOR_FINALIZATION = 10  # Allow scammer multiple attempts before finalizing
+            
+            if has_payment_info and total_messages >= MIN_MESSAGES_FOR_FINALIZATION and not finalized_sent:
                 out["finalized"] = True
                 session_state["finalized_sent"] = True
                 log.info(f"[{session_id}] Auto-finalizing: intel_count={intel_count}, messages={total_messages} (callback sent)")
-                agent_notes = f"auto-finalized by agent. extracted={merged_intel}, messages={total_messages}"
+                # Generate human-readable summary instead of debug format
+                agent_notes = generate_agent_notes(merged_intel, det.get("reason", "multi-factor"))
                 background.add_task(send_final_result, session_id, True, total_messages, merged_intel, agent_notes)
-            elif has_payment_info and total_messages >= 3 and finalized_sent:
+            elif has_payment_info and total_messages >= MIN_MESSAGES_FOR_FINALIZATION and finalized_sent:
                 # Already finalized and callback sent, but mark as finalized in response for UI
                 out["finalized"] = True
-                log.info(f"[{session_id}] Already finalized (callback already sent)")
+                log.info(f"[{session_id}] Already finalized (callback already sent at message {total_messages})")
 
         session_store.save_session(session_id, session_state)
         return out

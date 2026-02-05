@@ -95,10 +95,12 @@ def sanitize_reply(text: str) -> str:
     return text
 
 # ---------- Session state updater ----------
-def update_session_state(session_state: Dict[str, Any], incoming_text: str, extracted: Dict[str, Any]) -> Dict[str, Any]:
+def update_session_state(session_state: Dict[str, Any], incoming_text: str, extracted: Dict[str, Any], merged_intel: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Update session_state in-place from incoming message & extracted intelligence.
+    merged_intel: Optional historical intelligence accumulated from all turns
     """
+    merged_intel = merged_intel or {}
     s = session_state
     s.setdefault("trust_score", 0)
     s.setdefault("messages_count", 0)
@@ -117,18 +119,21 @@ def update_session_state(session_state: Dict[str, Any], incoming_text: str, extr
         s["trust_score"] = max(0, s["trust_score"] - 18)
 
     # extracted items increase flags & small trust adjustments
-    if extracted.get("upiIds"):
+    # Check BOTH current extracted AND historical merged intelligence
+    if extracted.get("upiIds") or merged_intel.get("upiIds"):
         s["upi_seen"] = True
         s["trust_score"] = min(100, s["trust_score"] + 18)
-        log.info(f"[AGENT] UPI IDs detected: {extracted.get('upiIds')} → upi_seen=True, trust={s['trust_score']}")
-    if extracted.get("phishingLinks"):
+        all_upis = list(set((extracted.get("upiIds") or []) + (merged_intel.get("upiIds") or [])))
+        log.info(f"[AGENT] UPI IDs detected (current + historical): {all_upis} → upi_seen=True, trust={s['trust_score']}")
+    if extracted.get("phishingLinks") or merged_intel.get("phishingLinks"):
         s["link_seen"] = True
         s["trust_score"] = max(0, s["trust_score"] - 5)
         log.info(f"[AGENT] Phishing links detected → link_seen=True, trust={s['trust_score']}")
-    if extracted.get("phoneNumbers"):
+    if extracted.get("phoneNumbers") or merged_intel.get("phoneNumbers"):
         s["phone_seen"] = True
         s["trust_score"] = min(100, s["trust_score"] + 10)
-        log.info(f"[AGENT] Phone numbers detected: {extracted.get('phoneNumbers')} → phone_seen=True, trust={s['trust_score']}")
+        all_phones = list(set((extracted.get("phoneNumbers") or []) + (merged_intel.get("phoneNumbers") or [])))
+        log.info(f"[AGENT] Phone numbers detected (current + historical): {all_phones} → phone_seen=True, trust={s['trust_score']}")
     if extracted.get("suspiciousKeywords"):
         s["trust_score"] = max(0, s["trust_score"] - (2 * len(extracted.get("suspiciousKeywords", []))))
 
@@ -141,16 +146,19 @@ def generate_agent_reply(session_state: Dict[str, Any],
                          last_message: Dict[str, Any],
                          extracted: Dict[str, Any],
                          mode: str = "template",
-                         llm_generate: Optional[callable] = None) -> Dict[str, Any]:
+                         llm_generate: Optional[callable] = None,
+                         merged_intel: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Returns: {'reply': str, 'intent': str, 'session_state': updated_state}
     mode: 'template' or 'llm' (if llm_generate provided, will call it to rephrase)
+    merged_intel: Historical intelligence accumulated from all turns
     """
+    merged_intel = merged_intel or {}
     session_state.setdefault("stage", "initial")
     
     # ✅ FIRST: Update session state (sets upi_seen, link_seen, adjusts trust_score)
-    log.info(f"[AGENT] Before update_session_state: upi_seen={session_state.get('upi_seen')}, extracted_upiIds={extracted.get('upiIds')}")
-    update_session_state(session_state, last_message.get("text", ""), extracted)
+    log.info(f"[AGENT] Before update_session_state: upi_seen={session_state.get('upi_seen')}, extracted_upiIds={extracted.get('upiIds')}, merged_upiIds={merged_intel.get('upiIds')}")
+    update_session_state(session_state, last_message.get("text", ""), extracted, merged_intel)
     
     # ✅ THEN: Get updated trust and flags for intent decision
     trust = session_state.get("trust_score", 0)
