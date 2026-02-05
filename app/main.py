@@ -300,11 +300,19 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
             intel_count = sum(len(v) for v in merged_intel.values())
             total_messages = len(session_state.get("message_history", []))
             has_payment_info = bool(merged_intel.get("upiIds") or merged_intel.get("phoneNumbers") or merged_intel.get("phishingLinks"))
-            if has_payment_info and total_messages >= 3:
+            finalized_sent = session_state.get("finalized_sent", False)
+            
+            # Only send finalization callback ONCE per session
+            if has_payment_info and total_messages >= 3 and not finalized_sent:
                 out["finalized"] = True
-                log.info(f"[{session_id}] Auto-finalizing: intel_count={intel_count}, messages={total_messages}")
+                session_state["finalized_sent"] = True
+                log.info(f"[{session_id}] Auto-finalizing: intel_count={intel_count}, messages={total_messages} (callback sent)")
                 agent_notes = f"auto-finalized by agent. extracted={merged_intel}, messages={total_messages}"
                 background.add_task(send_final_result, session_id, True, total_messages, merged_intel, agent_notes)
+            elif has_payment_info and total_messages >= 3 and finalized_sent:
+                # Already finalized and callback sent, but mark as finalized in response for UI
+                out["finalized"] = True
+                log.info(f"[{session_id}] Already finalized (callback already sent)")
 
         session_store.save_session(session_id, session_state)
         return out
