@@ -282,6 +282,8 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
                 "intent": agent_out["intent"]
             }
 
+            out["reply"] = agent_out["reply"]
+
             # reflect merged intelligence in the response
             out["extractedIntelligence"] = session_state.get("extracted_intelligence", merged_intel)
 
