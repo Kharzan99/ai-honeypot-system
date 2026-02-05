@@ -217,6 +217,7 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
 
         # Load an existing session or blank default (session_store.add_incoming_message will create & persist)
         session_state = session_store.get_session(session_id) or {}
+        log.info(f"[{session_id}] Loaded session state: upi_seen={session_state.get('upi_seen')}, phone_seen={session_state.get('phone_seen')}, trust={session_state.get('trust_score')}, messages={len(session_state.get('message_history', []))}")
 
         # Persist incoming message & merge extracted intelligence (always do this)
         session_state = session_store.add_incoming_message(
@@ -248,6 +249,10 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
             except Exception:
                 llm_generate = None
 
+            # Debug: Log what we're passing to agent
+            log.info(f"[{session_id}] Calling agent with merged_intel: {merged_intel}")
+            log.info(f"[{session_id}] Session state before agent: upi_seen={session_state.get('upi_seen')}, phone_seen={session_state.get('phone_seen')}, trust={session_state.get('trust_score')}")
+
             # Provide "llm" mode so generate_agent_reply will rephrase the selected template if available
             agent_out = generate_agent_reply(
                 session_state=session_state,
@@ -258,6 +263,8 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
             )
 
             # Update session state returned by agent (it may modify stage/trust)
+            session_state = agent_out.get("session_state", session_state)
+            log.info(f"[{session_id}] Agent returned intent={agent_out.get('intent')}, updated state: upi_seen={session_state.get('upi_seen')}, phone_seen={session_state.get('phone_seen')}, trust={session_state.get('trust_score')}")
             session_state = agent_out.get("session_state", session_state)
 
             # Append agent reply into session_state (both message_history and short_memory) and save
@@ -274,6 +281,7 @@ async def handle_event(request: Request, background: BackgroundTasks, x_api_key:
 
             # persist
             session_store.save_session(session_id, session_state)
+            log.info(f"[{session_id}] Session saved with flags: upi_seen={session_state.get('upi_seen')}, phone_seen={session_state.get('phone_seen')}, link_seen={session_state.get('link_seen')}, trust={session_state.get('trust_score')}")
 
             # Normalize agent reply for clean output (fix encoding issues)
             normalized_reply = normalize_output_text(agent_out["reply"])

@@ -120,16 +120,20 @@ def update_session_state(session_state: Dict[str, Any], incoming_text: str, extr
     if extracted.get("upiIds"):
         s["upi_seen"] = True
         s["trust_score"] = min(100, s["trust_score"] + 18)
+        log.info(f"[AGENT] UPI IDs detected: {extracted.get('upiIds')} → upi_seen=True, trust={s['trust_score']}")
     if extracted.get("phishingLinks"):
         s["link_seen"] = True
         s["trust_score"] = max(0, s["trust_score"] - 5)
+        log.info(f"[AGENT] Phishing links detected → link_seen=True, trust={s['trust_score']}")
     if extracted.get("phoneNumbers"):
         s["phone_seen"] = True
         s["trust_score"] = min(100, s["trust_score"] + 10)
+        log.info(f"[AGENT] Phone numbers detected: {extracted.get('phoneNumbers')} → phone_seen=True, trust={s['trust_score']}")
     if extracted.get("suspiciousKeywords"):
         s["trust_score"] = max(0, s["trust_score"] - (2 * len(extracted.get("suspiciousKeywords", []))))
 
     s["trust_score"] = int(max(0, min(100, s["trust_score"])))
+    log.info(f"[AGENT] Final state after update: upi_seen={s.get('upi_seen')}, phone_seen={s.get('phone_seen')}, link_seen={s.get('link_seen')}, trust={s['trust_score']}")
     return s
 
 # ---------- Main generator ----------
@@ -145,25 +149,32 @@ def generate_agent_reply(session_state: Dict[str, Any],
     session_state.setdefault("stage", "initial")
     
     # ✅ FIRST: Update session state (sets upi_seen, link_seen, adjusts trust_score)
+    log.info(f"[AGENT] Before update_session_state: upi_seen={session_state.get('upi_seen')}, extracted_upiIds={extracted.get('upiIds')}")
     update_session_state(session_state, last_message.get("text", ""), extracted)
     
     # ✅ THEN: Get updated trust and flags for intent decision
     trust = session_state.get("trust_score", 0)
+    log.info(f"[AGENT] After update_session_state: upi_seen={session_state.get('upi_seen')}, trust={trust}")
 
     # Decision logic (escalation)
     intent = "ask_reason"
     if session_state.get("upi_seen"):
         intent = "confirm"
+        log.info(f"[AGENT] Intent selected: CONFIRM (upi_seen=True)")
     else:
         if session_state.get("link_seen") and trust >= 30:
             intent = "ask_for_upi"
+            log.info(f"[AGENT] Intent selected: ASK_FOR_UPI (link_seen=True, trust={trust})")
         elif any(k in (extracted.get("suspiciousKeywords") or []) for k in ("upi", "pay", "transfer", "paytm")) and trust >= 40:
             intent = "ask_for_upi"
+            log.info(f"[AGENT] Intent selected: ASK_FOR_UPI (keyword match, trust={trust})")
         else:
             intent = "ask_reason"
+            log.info(f"[AGENT] Intent selected: ASK_REASON (default)")
 
     # pick base template
     reply = pick_template(intent, trust)
+    log.info(f"[AGENT] Template selected: '{reply[:60]}...' for intent={intent}, trust={trust}")
 
     # softer ask if trust low
     if intent == "ask_for_upi" and trust < 40:
